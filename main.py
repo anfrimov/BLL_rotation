@@ -8,6 +8,7 @@ Created on Mon Feb  4 00:14:52 2019
 
 import re, os, cairo, imageio, glob
 import pandas as pd
+import seaborn as sn
 
 pprim = pd.read_csv('Inputs/01_primary_areas_patterns.txt', sep='\t')
 pstat = pd.read_csv('Inputs/02_static_patterns.txt', sep='\t')
@@ -26,6 +27,8 @@ data_columns = ['Neurons_Shared3',
                 'Shared', 
                 'Unique']
 
+showStatic = True
+
 #%% Cairo Image Variables
             
 # sizes
@@ -40,37 +43,40 @@ sides = 2 # spacing buffer for cells
 # colors
 bgColor =       [0.0, 0.0, 0.0] # black
 sleepColor =    [0.2, 0.2, 0.2] # dark gray
+#bgColor =       [0.2, 0.2, 0.2]
+#sleepColor =    [0.0, 0.0, 0.0]
 
-# green+purple
-#activeColor =   [[0.9, 0.2, 1.0],
-#                 [0.7, 0.4, 0.9],
-#                 [0.5, 0.6, 0.8],
-#                 [0.3, 0.8, 0.7]]
+## Choose one static color:
 
-# CYM+red
-activeColor =   [[0.0, 1.0, 1.0],
-                 [1.0, 1.0, 0.0],
-                 [1.0, 0.0, 1.0],
-                 [0.5, 0.0, 0.0]]
+color_active = 'iron3'
+color_static = 'blue2'
 
-# iron, mine
-##activeColor =   [[1.000, 0.929, 0.478],
-#                 [1.000, 0.651, 0.224],
-#                 [0.949, 0.353, 0.145],
-#                 [0.812, 0.075, 0.502]]
 
-# iron, calc
-#activeColor = [[1.000, 0.988, 0.875],
-#               [0.996, 0.765, 0.000],
-#               [0.945, 0.408, 0.012],
-#               [0.796, 0.075, 0.522]] 
+# Define color choices
+active_colors = {
+        'blue1': sn.cubehelix_palette(4, start=2.85, rot=-0.10, hue=2, dark=.45, light=.95),
+        'blue2': sn.cubehelix_palette(4, start=2.85, rot=-0.10, hue=2, dark=.3, light=.9),
+        'iron1': sn.cubehelix_palette(4, start=0.05, rot= 0.50, hue=3, dark=.30, light=.95),
+        'iron2': [[1.000, 0.988, 0.875],[0.996, 0.765, 0.000],[0.945, 0.408, 0.012],[0.796, 0.075, 0.522]],
+        'iron3': [[1.000, 0.929, 0.478],[1.000, 0.651, 0.224],[0.949, 0.353, 0.145],[0.812, 0.075, 0.502]],
+        'blackbody1': sn.cubehelix_palette(4, start=0.6, rot= 0.3, hue=3, dark=0.2, light=.8),
+        'blockbody2': [[1.0, 0.988, 0.918],[1.0, 0.824, 0.0],[0.988, 0.345, 0.008],[0.769, 0.086, 0.145]]
+        }
+static_colors = {
+        'gray1': sn.cubehelix_palette(3, hue=0, dark=.4, light=.7),
+        'gray2': sn.cubehelix_palette(3, hue=0, dark=.2, light=.7),
+        'blue1': sn.cubehelix_palette(3, start=2.85, rot=-0.10, hue=2, dark=.4, light=.7),
+        'blue2': sn.cubehelix_palette(3, start=2.85, rot=-0.10, hue=2, dark=.2, light=.7)
+        }
 
-# glowbow
-#activeColor = [[1.0, 0.988, 0.918],
-#               [1.0, 0.824, 0.0],
-#               [0.988, 0.345, 0.008],
-#               [0.769, 0.086, 0.145]] 
-            
+# Set colors to be used
+activeColor = active_colors[color_active]
+staticColor = static_colors[color_static]
+
+## For displaying selected palettes
+
+#sn.palplot(activeColor)
+#sn.palplot(staticColor)
 
 #%% Array to grid converter
     
@@ -130,9 +136,49 @@ def makegrids(df, step, columns):
         grids.append(grid)
     return grids
 
+
+#%% Set pixel color
+
+def setpixcol(ctx, grid_level, neuron, inputColor=[1.0,1.0,1.0]):
+    
+    if any([neuron == cell for cell in grid_level]):
+        ctx.set_source_rgb(*inputColor)
+        active = True
+    else:
+        active = False
+        
+    return active
+                    
+
+#%% Draw grid on surface
+    
+def drawgrid(ctx, gsize, grid, dist, buffer, size, mainColor, sleepColor=[0.2,0.2,0.2], showStatic=False, stat_grid=[[]], staticColor=[[]]):
+    
+    for y in range(gsize):
+        for x in range(gsize):
+            active = False; static = False;
+            for level in range(len(grid)):
+                active = setpixcol(ctx, grid[level], [x,y], mainColor[level])
+                if active:
+                    break
+            
+            if showStatic and not active:
+                for level in range(len(grid)):
+                    if level < len(stat_grid):
+                        static = setpixcol(ctx, stat_grid[level], [x,y], staticColor[level])
+                    if static:
+                        break
+                    
+            if not active and not static:
+                ctx.set_source_rgb(*sleepColor)
+       
+            ctx.rectangle(y*dist+buffer, x*dist+buffer, size, size)
+            ctx.fill()
+
+
 #%% Cairo image - create and save .png file for one time step
     
-def makesteps(grids):
+def makestep(grids, stat_grids):
     """Generates .png image of a given time step.
     
     grids (list)= Output from makegrids()
@@ -165,25 +211,42 @@ def makesteps(grids):
                                     0, 0, gsizePX, 
                                     (gsizePX*(z%6)+ibuff), 
                                     (gsizePX*(z//6)+ibuff))) 
-    
-        for y in range(gsize):
-            for x in range(gsize):
-                for level in range(len(grids[z])):
-                    if any([[x,y] == cell for cell in grids[z][level]]):
-                        ctx.set_source_rgb(*activeColor[level])
-                        break
-                    else:
-                        ctx.set_source_rgb(*sleepColor)
-                    
-                ctx.rectangle(y*dist+buffer, x*dist+buffer, size, size)
-                ctx.fill()
+        
+        drawgrid(ctx, gsize, grids[z], dist, buffer, size, activeColor, sleepColor, showStatic, stat_grids[z], staticColor)
     
     surface.write_to_png(filename)
 
 
+#%% Image testing
+#showStatic = True
+#
+#size = 1/(gsize+sides)
+#dist = 1/(gsize+sides) + 1/(gsize+sides)/gsize
+#buffer = 1/(2*(gsize+sides))
+#ibuff = int(round(gsizePX*buffer))
+#    
+#stat_grids = makegrids(pstat, 'allts', data_columns[:3])
+#grids = makegrids(pdyna, 3, data_columns[:4])
+#
+#filename = 'test2.png'
+#
+#surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, gsizePX, gsizePX)
+#ctx = cairo.Context(surface)
+#
+#ctx.scale(gsizePX, gsizePX) # Normalizing the canvas
+#
+#ctx.set_source_rgb(*bgColor)
+#ctx.rectangle(0, 0, 1, 1)
+#ctx.fill()
+#
+#drawgrid(ctx, gsize, grids[2], dist, buffer, size, activeColor, sleepColor, showStatic, stat_grids[2], staticColor)
+#surface.write_to_png(filename)    
+
 #%% Create images
 
 # Update output file name and generate .png image
+stat_grids = makegrids(pstat, 'allts', data_columns[:3])
+    
 for x in range(len(pdyna.TimeStep.unique())):
     filenum = str(x+1)
     if len(filenum) < 2:
@@ -191,7 +254,7 @@ for x in range(len(pdyna.TimeStep.unique())):
     filename = '/'.join([outputDir,'step_%s.png' % (filenum)])
     
     grids = makegrids(pdyna, x+1, data_columns[:4])
-    makesteps(grids)
+    makestep(grids, stat_grids)
     
 #%% Create GIF from images
 
