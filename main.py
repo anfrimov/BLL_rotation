@@ -48,12 +48,14 @@ sleepColor =    [0.2, 0.2, 0.2] # dark gray
 
 ## Choose one static color:
 
-color_active = 'iron3'
-color_static = 'blue2'
+color_active = 'custom1'
+color_static = 'ungray1'
+color_prim =   'main'
 
 
 # Define color choices
 active_colors = {
+        'custom1': [[0.141, 0.457, 0.800],[0.250, 0.629, 0.935],[0.424, 0.787, 1.0],[.9,.5,.5]],
         'blue1': sn.cubehelix_palette(4, start=2.85, rot=-0.10, hue=2, dark=.45, light=.95),
         'blue2': sn.cubehelix_palette(4, start=2.85, rot=-0.10, hue=2, dark=.3, light=.9),
         'iron1': sn.cubehelix_palette(4, start=0.05, rot= 0.50, hue=3, dark=.30, light=.95),
@@ -65,18 +67,25 @@ active_colors = {
 static_colors = {
         'gray1': sn.cubehelix_palette(3, hue=0, dark=.4, light=.7),
         'gray2': sn.cubehelix_palette(3, hue=0, dark=.2, light=.7),
+        'ungray1': sn.cubehelix_palette(3, hue=0, dark=.4, light=.7, reverse=True),
+        'ungray2': sn.cubehelix_palette(3, hue=0, dark=.2, light=.7, reverse=True),
         'blue1': sn.cubehelix_palette(3, start=2.85, rot=-0.10, hue=2, dark=.4, light=.7),
         'blue2': sn.cubehelix_palette(3, start=2.85, rot=-0.10, hue=2, dark=.2, light=.7)
+        }
+prim_colors = {
+        'main': [[0.1, 0.7, 0.1], [1, 1, 1]]
         }
 
 # Set colors to be used
 activeColor = active_colors[color_active]
 staticColor = static_colors[color_static]
+primColor = prim_colors[color_prim]
 
 ## For displaying selected palettes
 
 #sn.palplot(activeColor)
 #sn.palplot(staticColor)
+#sn.palplot(primColor)
 
 #%% Array to grid converter
     
@@ -126,15 +135,24 @@ def makegrids(df, step, columns):
     """
     
     grids = []
-    for area in range(12):
-        grid = []
+    if 'TimeStep' in df.columns:
+        for area in range(12):
+            grid = []
+            for row in range(len(df)):
+                if df.TimeStep[row] == step and df.AreaAbs[row]-1 == area:
+                    for column in columns:
+                        neurons = getneurons(df[column][row]) 
+                        grid.append(neurons)
+            grids.append(grid)
+        return grids
+    else:
         for row in range(len(df)):
-            if df.TimeStep[row] == step and df.AreaAbs[row]-1 == area:
-                for column in columns:
-                    neurons = getneurons(df[column][row]) 
-                    grid.append(neurons)
-        grids.append(grid)
-    return grids
+            grid = []
+            for column in columns:
+                neurons = getneurons(df[column][row])
+                grid.append(neurons)
+            grids.append(grid)
+        return grids
 
 
 #%% Set pixel color
@@ -178,7 +196,7 @@ def drawgrid(ctx, gsize, grid, dist, buffer, size, mainColor, sleepColor=[0.2,0.
 
 #%% Cairo image - create and save .png file for one time step
     
-def makestep(grids, stat_grids):
+def makestep(grids, stat_grids, prim_grids):
     """Generates .png image of a given time step.
     
     grids (list)= Output from makegrids()
@@ -193,7 +211,14 @@ def makestep(grids, stat_grids):
     buffer = 1/(2*(gsize+sides))
     ibuff = int(round(gsizePX*buffer))
     
-    wd, ht = 6*gsizePX+2*ibuff, 2*gsizePX+2*ibuff
+    if not prim_grids:
+        numCol = 6
+        prim = 0
+    else:
+        numCol = 8
+        prim = 1
+        
+    wd, ht = numCol*gsizePX+2*ibuff, 2*gsizePX+2*ibuff
     
     surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, wd, ht)
     ctx = cairo.Context(surface)
@@ -205,14 +230,19 @@ def makestep(grids, stat_grids):
     ctx.fill()
     
     
-    ctx.scale(1/6, 1/2)
+    ctx.scale(1/numCol, 1/2)
     for z in range(len(grids)):
         ctx.set_matrix(cairo.Matrix(gsizePX, 
                                     0, 0, gsizePX, 
-                                    (gsizePX*(z%6)+ibuff), 
+                                    (gsizePX*(z%6)+ibuff+gsizePX*prim), 
                                     (gsizePX*(z//6)+ibuff))) 
         
         drawgrid(ctx, gsize, grids[z], dist, buffer, size, activeColor, sleepColor, showStatic, stat_grids[z], staticColor)
+    if numCol == 8:
+        ctx.set_matrix(cairo.Matrix(gsizePX, 0, 0, gsizePX, ibuff, ibuff))
+        drawgrid(ctx, gsize, prim_grids[0], dist, buffer, size, primColor, sleepColor)
+        ctx.set_matrix(cairo.Matrix(gsizePX, 0, 0, gsizePX, (gsizePX*7+ibuff), ibuff))
+        drawgrid(ctx, gsize, prim_grids[1], dist, buffer, size, primColor, sleepColor)
     
     surface.write_to_png(filename)
 
@@ -246,6 +276,7 @@ def makestep(grids, stat_grids):
 
 # Update output file name and generate .png image
 stat_grids = makegrids(pstat, 'allts', data_columns[:3])
+prim_grids = makegrids(pprim, None, data_columns[4:])
     
 for x in range(len(pdyna.TimeStep.unique())):
     filenum = str(x+1)
@@ -254,7 +285,7 @@ for x in range(len(pdyna.TimeStep.unique())):
     filename = '/'.join([outputDir,'step_%s.png' % (filenum)])
     
     grids = makegrids(pdyna, x+1, data_columns[:4])
-    makestep(grids, stat_grids)
+    makestep(grids, stat_grids, prim_grids)
     
 #%% Create GIF from images
 
