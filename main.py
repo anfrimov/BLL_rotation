@@ -3,10 +3,10 @@
 """
 Created on Mon Feb  4 00:14:52 2019
 
-@author: anthony819
+@author: anthony
 """
 
-import re, os, cairo, imageio, glob
+import re, os, cairo, imageio, glob, getopt, sys
 import pandas as pd
 import seaborn as sn
 
@@ -16,8 +16,8 @@ pdyna = pd.read_csv('Inputs/03_dynamic_patterns.txt', sep='\t')
 
 #%% Variables
 
-wdir = os.listdir(os.getcwd()) # sets working dir for script: default = cwd
-outputDir = 'Images' # name of folder in which to store still frames and GIFs
+OutDir = os.listdir(os.getcwd()) # sets output dir for script: default = cwd
+ImageDir = 'Images' # name of folder in which to store still frames and GIFs
 
 separators = re.compile('[#;]')
 data_columns = ['Neurons_Shared3', 
@@ -27,7 +27,7 @@ data_columns = ['Neurons_Shared3',
                 'Shared', 
                 'Unique']
 
-showStatic = True
+showStatic = False
 
 #%% Cairo Image Variables
             
@@ -272,30 +272,80 @@ def makestep(grids, stat_grids, prim_grids):
 #drawgrid(ctx, gsize, grids[2], dist, buffer, size, activeColor, sleepColor, showStatic, stat_grids[2], staticColor)
 #surface.write_to_png(filename)    
 
-#%% Create images
 
-# Update output file name and generate .png image
-stat_grids = makegrids(pstat, 'allts', data_columns[:3])
-prim_grids = makegrids(pprim, None, data_columns[4:])
+#%% Main script
+if __name__ == '__main__':
     
-for x in range(len(pdyna.TimeStep.unique())):
-    filenum = str(x+1)
-    if len(filenum) < 2:
-        filenum = '0' + filenum
-    filename = '/'.join([outputDir,'step_%s.png' % (filenum)])
-    
-    grids = makegrids(pdyna, x+1, data_columns[:4])
-    makestep(grids, stat_grids, prim_grids)
-    
-#%% Create GIF from images
+#%% Parse input arguments
+    def main(argv):
+        
+        
+        
+        
+        
+        
+        
+        try: 
+            opts, args = getopt.getopt(argv,
+                                       'ho:s:p:g:D:S:P:d',
+                                       ['help', 
+                                        'output=',
+                                        'static=', 
+                                        'primary=',
+                                        'color-dynamic=',
+                                        'color-static=',
+                                        'color-primary=',
+                                        'grid-size=',
+                                        'display-colors'])
+        except getopt.GetoptError:
+            print('Unrecognized input or option. See help for details.')
+            sys.exit(2)
+            
+        pdyna = pd.read_csv(args[0], sep='\t')
+        for opt, arg in opts:
+            if opt in ('-h','--help'):
+                print('Heeeeeeeeeelp!!!')
+                sys.exit()
+            elif opt in ('-o','--output'):
+                outputDir = arg
+            elif opt in ('-s','--static'):
+                pstat = pd.read_csv(arg, sep='\t')
+            elif opt in ('-p','--primary'):
+                pprim = pd.read_csv(arg, sep='\t')
+            elif opt in ('-D','--color-dynamic'):
+                color_active = arg
+            elif opt in ('-S','--color-static'):
+                color_static = arg
+            elif opt in ('-P','--color-primary'):
+                color_prim = arg
+            elif opt in ('-g','--grid-size'):
+                gsizePX = arg
 
-# Pull list of time step images from output directory    
-imageList = glob.glob(outputDir+'/*.png')
-filename = 'new.gif'
+        #%% Create images
+        # Update output file name and generate .png image
+        stat_grids = makegrids(pstat, 'allts', data_columns[:3])
+        prim_grids = makegrids(pprim, None, data_columns[4:])
+    
+        for x in range(len(pdyna.TimeStep.unique())):
+            filenum = str(x+1)
+            if len(filenum) < 2:
+                filenum = '0' + filenum
+            filename = '/'.join([ImageDir,'step_%s.png' % (filenum)])
+            # filename = os.path.join(ImageDir,'step_%s.png' % (filenum))
+    
+            grids = makegrids(pdyna, x+1, data_columns[:4])
+            makestep(grids, stat_grids, prim_grids)
+    
+        #%% Create GIF from images
+        # Pull list of time step images from output directory    
+        imageList = glob.glob(ImageDir+'/*.png')
+        filename = 'new.gif'
+    
+        # Create GIF
+        with imageio.get_writer(filename, mode='I', duration=0.2) as writer:
+            for image in imageList:
+                frame = imageio.imread(image)
+                writer.append_data(frame)
 
-# Create GIF
-with imageio.get_writer(filename, mode='I', duration=0.2) as writer:
-    for image in imageList:
-        frame = imageio.imread(image)
-        writer.append_data(frame)
-         
+#%% Run
+    main(sys.argv[1:])
