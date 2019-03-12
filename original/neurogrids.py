@@ -106,7 +106,7 @@ def array2grid(num, size=25):
 
 #%% Get neurons
     
-def getneurons(df_cell):
+def getneurons(df_cell, convert=True):
     neurons = []
     if isinstance(df_cell, str):
         separator = separators.findall(df_cell)
@@ -117,8 +117,9 @@ def getneurons(df_cell):
             
         while '' in neurons:
             neurons.remove('')
-        for n in range(len(neurons)):
-            neurons[n] = array2grid(neurons[n])
+        if convert:
+            for n in range(len(neurons)):
+                neurons[n] = array2grid(neurons[n])
         
     return neurons
 #%% Generate neural activity grid and transform
