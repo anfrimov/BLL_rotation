@@ -84,37 +84,23 @@ def makegrids(df, step, columns):
     
 #%% Set pixel color
 def setpixcol(ctx, grid_level, neuron, inputColor=[1.0,1.0,1.0]):
-    
     if any([neuron == cell for cell in grid_level]):
         ctx.set_source_rgb(*inputColor)
-        active = True
-    else:
-        active = False
-        
-    return active
                 
     
 #%% Draw grid on surface   
 def drawgrid(ctx, gsize, grid, dist, buffer, size, mainColor, sleepColor=[0.2,0.2,0.2], showStatic=False, stat_grid=[[]], staticColor=[[]]):
     
     for y in range(gsize):
-        for x in range(gsize):
-            active = False; static = False;
+        for x in range(gsize):            
+            ctx.set_source_rgb(*sleepColor)
+
+            for level in range(len(stat_grid)):
+                setpixcol(ctx, stat_grid[level], [x,y], staticColor[level])
+
             for level in range(len(grid)):
-                active = setpixcol(ctx, grid[level], [x,y], mainColor[level])
-                if active:
-                    break
-            
-            if showStatic and not active:
-                for level in range(len(grid)):
-                    if level < len(stat_grid):
-                        static = setpixcol(ctx, stat_grid[level], [x,y], staticColor[level])
-                    if static:
-                        break
-                    
-            if not active and not static:
-                ctx.set_source_rgb(*sleepColor)
-       
+                setpixcol(ctx, grid[level], [x,y], mainColor[level])
+                           
             ctx.rectangle(y*dist+buffer, x*dist+buffer, size, size)
             ctx.fill()
 
