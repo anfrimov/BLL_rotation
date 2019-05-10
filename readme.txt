@@ -14,3 +14,8 @@ python3 terminal/neurogrids.py ../Inputs/03b_dynamic_patterns.txt \
 
 cd "/Users/anthony819/Documents/Python/Brain Language Lab/code"
 python3 terminal/neurogrids.py --palette-options
+
+
+
+
+https://mybinder.org/v2/gh/anfrimov/BLL_rotation/master
